@@ -1,0 +1,36 @@
+name: build-dashboard
+on:
+  schedule:
+    - cron: '20 3 * * *'   # 06:20 RO (nyári idő, UTC+3)
+  workflow_dispatch:        # kézi indítás is
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Generate encrypted dashboard
+        run: node generate.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DASHBOARD_PIN: ${{ secrets.DASHBOARD_PIN }}
+      - name: Assemble site
+        run: mkdir -p _site && cp index.html _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

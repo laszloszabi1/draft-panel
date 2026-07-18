@@ -1,0 +1,10 @@
+{
+  "name": "rm-panel",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Draft call-center teljesítmény-dashboard (napi frissülés, PIN-titkosított).",
+  "scripts": {
+    "build": "node generate.mjs"
+  }
+}
