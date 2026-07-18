@@ -206,6 +206,7 @@ async function decryptData(payload, pin){
   return JSON.parse(new TextDecoder().decode(pt));
 }
 const ron = n => Math.round(n).toLocaleString('ro-RO');
+const canHover = window.matchMedia('(hover:hover) and (pointer:fine)').matches;
 const tip = document.getElementById('tip');
 function showTipEl(el,html){ tip.innerHTML=html; tip.style.opacity=1;
   const r=el.getBoundingClientRect(), half=tip.offsetWidth/2; let left=r.left+r.width/2;
@@ -253,13 +254,16 @@ function render(){
     const conv=d.recv?Math.round(d.pull/d.recv*100):0;
     const html=`<div class="tt">${D.monthName} ${d.label}. — ${conv}% konv.</div><div class="tr"><span><i style="background:rgba(91,141,239,.6)"></i>Beérkezett</span><b>${d.recv}</b></div><div class="tr"><span><i style="background:rgba(255,182,72,.75)"></i>Felkeresett</span><b>${d.call}</b></div><div class="tr"><span><i style="background:var(--grn)"></i>Behúzott</span><b>${d.pull}</b></div>`;
     const stack=col.querySelector('.stack');
-    col.addEventListener('mouseenter',()=>showTipEl(stack,html)); col.addEventListener('mouseleave',hideTip);
+    if(canHover){ col.addEventListener('mouseenter',()=>showTipEl(stack,html)); col.addEventListener('mouseleave',hideTip); }
     col.addEventListener('click',()=>showDay(d));
     dc.appendChild(col); });
 }
+window.addEventListener('scroll',hideTip,{passive:true});
+window.addEventListener('touchmove',hideTip,{passive:true});
 const STAT_HEX = s => s.startsWith('✅')?'#2ee6a6':s.startsWith('↩️')?'#ff5f7e':s.startsWith('🚚')?'#ffb648':s.startsWith('📦')?'#2ee6a6':s.startsWith('📞')?'#5b8def':'#8a97b4';
 const money = n => Number(n).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2});
 function showDay(d){
+  hideTip();
   document.getElementById('detailTitle').textContent=`${DATA.monthName} ${d.label}. — aznapi draftok`;
   document.getElementById('mSub').textContent=`Beérkezett ${d.recv} · Felkeresett ${d.call} · Behúzott ${d.pull} — állapot szerint rendezve`;
   document.getElementById('mBody').innerHTML = (d.orders||[]).map(o=>{ const c=STAT_HEX(o.s);
