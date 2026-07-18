@@ -41,6 +41,13 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.35;background-i
 .badge{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line2);border-radius:999px;padding:9px 15px;font-size:12px;color:var(--mut);backdrop-filter:blur(10px)}
 .dotlive{width:9px;height:9px;border-radius:50%;background:var(--grn);animation:pulse 2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,230,166,.6)}70%{box-shadow:0 0 0 8px rgba(46,230,166,0)}100%{box-shadow:0 0 0 0 rgba(46,230,166,0)}}
+.refresh{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line2);border-radius:999px;padding:9px 14px;font-size:12.5px;color:var(--txt);font-weight:700;cursor:pointer;backdrop-filter:blur(10px);transition:.2s;font-family:inherit}
+.refresh:hover{border-color:var(--grn);color:var(--grn)}
+.refresh:active{transform:scale(.95)}
+.refresh:disabled{opacity:.6;cursor:default}
+.refresh.spin b{display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.headright{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 /* cards */
 .grid{display:grid;gap:16px}.k4{grid-template-columns:repeat(4,1fr)}.k2{grid-template-columns:1fr 1fr}
 .card{position:relative;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:18px;padding:20px;backdrop-filter:blur(14px);transition:transform .25s,box-shadow .25s,border-color .25s;overflow:hidden}
@@ -151,7 +158,11 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.35;background-i
 
 <div class="wrap" id="app" style="display:none">
   <div class="head rv"><h1><span>🧲</span> Zsolt — <em>draft-behúzó központ</em></h1>
-    <span class="badge"><span class="dotlive"></span><span id="upd">LIVE</span></span></div>
+    <div class="headright">
+      <span class="badge" id="updBadge"><span class="dotlive"></span><span id="upd">LIVE</span></span>
+      <button id="refreshBtn" class="refresh"><b>🔄</b> Frissítés</button>
+    </div>
+  </div>
 
   <div class="card hero rv" style="animation-delay:.08s">
     <div class="gauge"><svg width="170" height="170" viewBox="0 0 170 170">
@@ -207,6 +218,10 @@ async function decryptData(payload, pin){
 }
 const ron = n => Math.round(n).toLocaleString('ro-RO');
 const canHover = window.matchMedia('(hover:hover) and (pointer:fine)').matches;
+let currentPin = null, updTimer = null;
+function relTime(ms){ if(!ms) return DATA.generatedAt||''; const s=Math.max(0,Math.round((Date.now()-ms)/1000));
+  if(s<60) return 'épp most'; const m=Math.round(s/60); if(m<60) return m+' perce';
+  const h=Math.round(m/60); if(h<24) return h+' órája'; return Math.round(h/24)+' napja'; }
 const tip = document.getElementById('tip');
 function showTipEl(el,html){ tip.innerHTML=html; tip.style.opacity=1;
   const r=el.getBoundingClientRect(), half=tip.offsetWidth/2; let left=r.left+r.width/2;
@@ -217,7 +232,10 @@ function countUp(el,target,suffix,small){ const t0=performance.now();
 
 function render(){
   const D=DATA;
-  document.getElementById('upd').textContent='LIVE · frissült '+D.generatedAt;
+  const updEl=document.getElementById('upd');
+  const paintUpd=()=>{ updEl.textContent='frissült '+relTime(D.builtAt); };
+  paintUpd(); document.getElementById('updBadge').title='Build: '+(D.generatedAt||'');
+  clearInterval(updTimer); updTimer=setInterval(paintUpd,30000);
   document.getElementById('heroLbl').textContent='Behúzási konverzió — '+D.monthName;
   document.getElementById('heroSub').innerHTML=`<b>${D.pulled}</b> behúzott a <b>${D.received}</b> beérkezett draftból. Felkeresett: <b>${D.called}</b> (${D.calledPct}%).`;
   document.getElementById('heroChips').innerHTML=`<span class="chip">🔥 +${D.pulledToday} behúzva ma</span><span class="chip b">📞 ${D.calledPct}% felkeresve</span>`;
@@ -248,7 +266,7 @@ function render(){
 
   // daily stacked
   const dmax=Math.max(...D.daily.map(d=>d.recv),1);
-  const dc=document.getElementById('daily');
+  const dc=document.getElementById('daily'); dc.innerHTML='';
   D.daily.forEach(d=>{ const col=document.createElement('div');col.className='col';
     col.innerHTML=`<div class="stack"><div class="layer l-recv" data-h="${d.recv/dmax*100}"></div><div class="layer l-call" data-h="${d.call/dmax*100}"></div><div class="layer l-pull" data-h="${d.pull/dmax*100}"></div></div><span class="vx">${d.label}</span>`;
     const conv=d.recv?Math.round(d.pull/d.recv*100):0;
@@ -302,7 +320,7 @@ async function tryUnlock(){
   if(busy) return; const code=(pin.value||'').trim(); if(!code){pin.focus();return;}
   busy=true; err.textContent=''; unlockBtn.textContent='Ellenőrzés…';
   try{
-    DATA = await decryptData(PAYLOAD, code);
+    DATA = await decryptData(PAYLOAD, code); currentPin = code;
     render(); gate.style.display='none'; app.style.display='block'; setTimeout(animate,80);
   }catch(e){
     err.textContent='Hibás PIN. Próbáld újra.'; pin.value=''; pin.focus();
@@ -312,6 +330,21 @@ async function tryUnlock(){
 unlockBtn.addEventListener('click',tryUnlock);
 pin.addEventListener('keydown',e=>{if(e.key==='Enter')tryUnlock();});
 window.addEventListener('load',()=>pin.focus());
+
+// 🔄 Frissítés: a legfrissebb buildet tölti be és újrarendereli (PIN újragépelés nélkül)
+const refreshBtn=document.getElementById('refreshBtn');
+async function refreshNow(){
+  if(!currentPin) return;
+  refreshBtn.disabled=true; refreshBtn.classList.add('spin');
+  try{
+    const res=await fetch(location.pathname+'?t='+Date.now(),{cache:'no-store'});
+    const html=await res.text();
+    const m=html.match(/const PAYLOAD = (\{.*?\});/s);
+    if(m){ DATA=await decryptData(JSON.parse(m[1]),currentPin); closeDay(); render(); animate(); }
+  }catch(e){}
+  finally{ setTimeout(()=>{refreshBtn.classList.remove('spin'); refreshBtn.disabled=false;},400); }
+}
+refreshBtn.addEventListener('click',refreshNow);
 </script>
 </body>
 </html>

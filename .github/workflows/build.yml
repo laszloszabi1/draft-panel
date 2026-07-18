@@ -1,8 +1,8 @@
 name: build-dashboard
 on:
   schedule:
-    - cron: '20 3 * * *'   # 06:20 RO (nyári idő, UTC+3)
-  workflow_dispatch:        # kézi indítás is
+    - cron: '*/30 5-18 * * *'   # minden 30 percben 08:00–21:00 RO (nyári idő, UTC+3)
+  workflow_dispatch:            # kézi indítás is
 permissions:
   contents: read
   pages: write

@@ -116,6 +116,7 @@ const daily = days.map(day=>{ const g = pop.filter(d=>buDay(d.created_at)===day)
 
 const DATA = {
   generatedAt: new Intl.DateTimeFormat('hu-HU',{timeZone:'Europe/Bucharest',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date()),
+  builtAt: Date.now(),
   month: MONTH, monthName: 'Július',
   received, called, pulled, conversion: received?Math.round(pulled/received*100):0,
   calledPct: received?Math.round(called/received*100):0, pulledToday,
