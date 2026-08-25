@@ -48,6 +48,8 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.35;background-i
 .refresh.spin b{display:inline-block;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .headright{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.msel{appearance:none;padding-right:30px;background-image:linear-gradient(180deg,var(--card),var(--card2)),url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='7'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a97b4' stroke-width='1.6'/></svg>");background-repeat:no-repeat,no-repeat;background-position:0 0,right 12px center;background-size:100% 100%,10px 7px}
+.archbar{display:flex;align-items:center;gap:10px;background:rgba(139,124,246,.12);border:1px solid rgba(139,124,246,.35);color:#cfc7ff;border-radius:14px;padding:11px 16px;font-size:13px;margin-bottom:14px}
 /* cards */
 .grid{display:grid;gap:16px}.k4{grid-template-columns:repeat(4,1fr)}.k2{grid-template-columns:1fr 1fr}
 .card{position:relative;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:18px;padding:20px;backdrop-filter:blur(14px);transition:transform .25s,box-shadow .25s,border-color .25s;overflow:hidden}
@@ -159,10 +161,14 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.35;background-i
 <div class="wrap" id="app" style="display:none">
   <div class="head rv"><h1><span>🧲</span> Zsolt — <em>draft-behúzó központ</em></h1>
     <div class="headright">
+      <select id="monthSel" class="refresh msel" title="Hónap választása"></select>
       <span class="badge" id="updBadge"><span class="dotlive"></span><span id="upd">LIVE</span></span>
+      <button id="csvBtn" class="refresh" title="A kiválasztott hónap adatai CSV-ben"><b>⬇</b> CSV</button>
       <button id="refreshBtn" class="refresh"><b>🔄</b> Frissítés</button>
     </div>
   </div>
+
+  <div class="archbar" id="archBar" style="display:none"></div>
 
   <div class="card hero rv" style="animation-delay:.08s">
     <div class="gauge"><svg width="170" height="170" viewBox="0 0 170 170">
@@ -230,19 +236,34 @@ function hideTip(){ tip.style.opacity=0 }
 function countUp(el,target,suffix,small){ const t0=performance.now();
   function step(t){ const p=Math.min(1,(t-t0)/1100), e=1-Math.pow(1-p,3); el.innerHTML=ron(target*e)+suffix+(small||''); if(p<1)requestAnimationFrame(step); } requestAnimationFrame(step); }
 
+// ---- hónap-kezelés: DATA.months[0] = az aktuális (élő) hónap, utána az archivált hónapok ----
+let SEL = null;                                    // a kiválasztott hónap kódja, pl. '2026-08'
+const monthOf = m => (DATA.months||[]).find(x=>x.month===m) || DATA.months[0];
+function fillMonthSel(){
+  const sel=document.getElementById('monthSel');
+  sel.innerHTML=(DATA.months||[]).map(m=>`<option value="${m.month}">${m.monthName}${m.month===DATA.current?' · élő':''}</option>`).join('');
+  sel.value=SEL;
+}
+function selectMonth(m){ SEL=m; closeDay(); render(); animate(); }
+
 function render(){
-  const D=DATA;
+  const D=monthOf(SEL);
+  fillMonthSel();
+  const arch=document.getElementById('archBar');
+  if(D.month===DATA.current){ arch.style.display='none'; }
+  else { arch.style.display='flex'; arch.innerHTML=`📁 <b>Lezárt hónap</b> — ${D.monthName} archív pillanatképe. Az élő számokhoz válaszd a legfelső hónapot.`; }
   const updEl=document.getElementById('upd');
-  const paintUpd=()=>{ updEl.textContent='frissült '+relTime(D.builtAt); };
-  paintUpd(); document.getElementById('updBadge').title='Build: '+(D.generatedAt||'');
+  const paintUpd=()=>{ updEl.textContent='frissült '+relTime(DATA.builtAt); };
+  paintUpd(); document.getElementById('updBadge').title='Build: '+(DATA.generatedAt||'');
   clearInterval(updTimer); updTimer=setInterval(paintUpd,30000);
+  const liveM = D.month===DATA.current;
   document.getElementById('heroLbl').textContent='Behúzási konverzió — '+D.monthName;
   document.getElementById('heroSub').innerHTML=`<b>${D.pulled}</b> behúzott a <b>${D.received}</b> beérkezett draftból. Felkeresett: <b>${D.called}</b> (${D.calledPct}%).`;
-  document.getElementById('heroChips').innerHTML=`<span class="chip">🔥 +${D.pulledToday} behúzva ma</span><span class="chip b">📞 ${D.calledPct}% felkeresve</span>`;
-  document.getElementById('kPullSub').innerHTML=`<span class="up">+${D.pulledToday} ma</span> · ${D.monthName}`;
+  document.getElementById('heroChips').innerHTML=(liveM?`<span class="chip">🔥 +${D.pulledToday} behúzva ma</span>`:`<span class="chip">📁 lezárt hónap</span>`)+`<span class="chip b">📞 ${D.calledPct}% felkeresve</span>`;
+  document.getElementById('kPullSub').innerHTML=(liveM?`<span class="up">+${D.pulledToday} ma</span> · `:'')+D.monthName;
   document.getElementById('kCallSub').textContent=`${D.calledPct}% a beérkezettből`;
   document.getElementById('kEarnSub').textContent=`${D.commission.fix} fix + ${D.commission.per} lej × ${D.delivered} leszállítva`;
-  document.getElementById('foot').innerHTML=`ReduceriMania · draft call-center · adat: Shopify + Cargus (live), frissült ${D.generatedAt}<br>Csak Zsolt teljesítmény-számai — ügyféladat nincs a felületen.`;
+  document.getElementById('foot').innerHTML=`ReduceriMania · draft call-center · adat: Shopify + DPD/Cargus (live), frissült ${DATA.generatedAt}<br>Minden hónap 1-jén nulláról indul; a lezárt hónapok az archívumban maradnak.`;
   document.getElementById('funnelTitle').textContent=D.monthName+' tölcsér — draftok útja';
 
   // shipping bars
@@ -270,7 +291,7 @@ function render(){
   D.daily.forEach(d=>{ const col=document.createElement('div');col.className='col';
     col.innerHTML=`<div class="stack"><div class="layer l-recv" data-h="${d.recv/dmax*100}"></div><div class="layer l-call" data-h="${d.call/dmax*100}"></div><div class="layer l-pull" data-h="${d.pull/dmax*100}"></div></div><span class="vx">${d.label}</span>`;
     const conv=d.recv?Math.round(d.pull/d.recv*100):0;
-    const html=`<div class="tt">${D.monthName} ${d.label}. — ${conv}% konv.</div><div class="tr"><span><i style="background:rgba(91,141,239,.6)"></i>Beérkezett</span><b>${d.recv}</b></div><div class="tr"><span><i style="background:rgba(255,182,72,.75)"></i>Felkeresett</span><b>${d.call}</b></div><div class="tr"><span><i style="background:var(--grn)"></i>Behúzott</span><b>${d.pull}</b></div>`;
+    const html=`<div class="tt">${shortName(D)} ${d.label}. — ${conv}% konv.</div><div class="tr"><span><i style="background:rgba(91,141,239,.6)"></i>Beérkezett</span><b>${d.recv}</b></div><div class="tr"><span><i style="background:rgba(255,182,72,.75)"></i>Felkeresett</span><b>${d.call}</b></div><div class="tr"><span><i style="background:var(--grn)"></i>Behúzott</span><b>${d.pull}</b></div>`;
     const stack=col.querySelector('.stack');
     if(canHover){ col.addEventListener('mouseenter',()=>showTipEl(stack,html)); col.addEventListener('mouseleave',hideTip); }
     col.addEventListener('click',()=>showDay(d));
@@ -280,9 +301,10 @@ window.addEventListener('scroll',hideTip,{passive:true});
 window.addEventListener('touchmove',hideTip,{passive:true});
 const STAT_HEX = s => s.startsWith('✅')?'#2ee6a6':s.startsWith('↩️')?'#ff5f7e':s.startsWith('🚚')?'#ffb648':s.startsWith('📦')?'#2ee6a6':s.startsWith('📞')?'#5b8def':'#8a97b4';
 const money = n => Number(n).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2});
+const shortName = m => (m.monthName||'').replace(/\s\d{4}$/,'');
 function showDay(d){
   hideTip();
-  document.getElementById('detailTitle').textContent=`${DATA.monthName} ${d.label}. — aznapi draftok`;
+  document.getElementById('detailTitle').textContent=`${shortName(monthOf(SEL))} ${d.label}. — aznapi draftok`;
   document.getElementById('mSub').textContent=`Beérkezett ${d.recv} · Felkeresett ${d.call} · Behúzott ${d.pull} — állapot szerint rendezve`;
   document.getElementById('mBody').innerHTML = (d.orders||[]).map(o=>{ const c=STAT_HEX(o.s);
     return `<div class="mrow2" style="background:${c}14;border-color:${c}33;border-left-color:${c}">
@@ -298,7 +320,7 @@ function closeDay(){ document.getElementById('detailHead').style.display='none';
 document.getElementById('detailClose').addEventListener('click',closeDay);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDay(); });
 function animate(){
-  const D=DATA;
+  const D=monthOf(SEL);
   document.getElementById('arc').style.strokeDashoffset=452*(1-D.conversion/100);
   countUp(document.getElementById('convNum'),D.conversion,'%');
   countUp(document.getElementById('kPull'),D.pulled,'',' <small>db</small>');
@@ -320,7 +342,7 @@ async function tryUnlock(){
   if(busy) return; const code=(pin.value||'').trim(); if(!code){pin.focus();return;}
   busy=true; err.textContent=''; unlockBtn.textContent='Ellenőrzés…';
   try{
-    DATA = await decryptData(PAYLOAD, code); currentPin = code;
+    DATA = await decryptData(PAYLOAD, code); currentPin = code; SEL = DATA.current;
     render(); gate.style.display='none'; app.style.display='block'; setTimeout(animate,80);
   }catch(e){
     err.textContent='Hibás PIN. Próbáld újra.'; pin.value=''; pin.focus();
@@ -340,11 +362,29 @@ async function refreshNow(){
     const res=await fetch(location.pathname+'?t='+Date.now(),{cache:'no-store'});
     const html=await res.text();
     const m=html.match(/const PAYLOAD = (\{.*?\});/s);
-    if(m){ DATA=await decryptData(JSON.parse(m[1]),currentPin); closeDay(); render(); animate(); }
+    if(m){ DATA=await decryptData(JSON.parse(m[1]),currentPin);
+      if(!(DATA.months||[]).some(x=>x.month===SEL)) SEL=DATA.current;   // hónapforduló után az élő hónapra ugrunk
+      closeDay(); render(); animate(); }
   }catch(e){}
   finally{ setTimeout(()=>{refreshBtn.classList.remove('spin'); refreshBtn.disabled=false;},400); }
 }
 refreshBtn.addEventListener('click',refreshNow);
+document.getElementById('monthSel').addEventListener('change',e=>selectMonth(e.target.value));
+
+// ⬇ CSV-export — a kiválasztott hónap összes draftja, soronként (Sheets/Excel-be nyitható)
+document.getElementById('csvBtn').addEventListener('click',()=>{
+  const M=monthOf(SEL); if(!M) return;
+  const q = v => '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const head=['Nap','Draft','Termek','Osszeg_lej','Allapot','Futar','AWB','Jegyzet'];
+  const rows=(M.daily||[]).flatMap(d=>(d.orders||[]).map(o=>[o.day||`${M.month}-${String(d.label).padStart(2,'0')}`,o.name,o.prod,o.amount,o.s,o.carrier||'',o.awb||'',o.note||'']));
+  const sum=[[],['OSSZESITES',M.monthName],['Beerkezett',M.received],['Felkeresett',M.called],['Behuzott',M.pulled],
+    ['Konverzio_%',M.conversion],['Leszallitva',M.delivered],['Retur',M.retur],['Uton',M.transit],
+    ['Atveteli_rata_%',M.deliveredRate],['Retur_rata_%',M.returRate],['Behuzott_ertek_lej',M.revenue??''],['Jutalek_lej',M.commission.earned]];
+  const csv='﻿'+[head,...rows,...sum].map(r=>r.map(q).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`draft-behuzas-${M.month}.csv`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+});
 </script>
 </body>
 </html>
